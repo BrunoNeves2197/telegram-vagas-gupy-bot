@@ -1,10 +1,13 @@
 import os
 import re
 import time
+import html
 import sqlite3
 import requests
-import xml.etree.ElementTree as ET
 from datetime import datetime, timedelta
+
+def esc(texto):
+    return html.escape(str(texto)) if texto else ""
 
 try:
     from bs4 import BeautifulSoup
@@ -47,6 +50,13 @@ GAPS_ELIMINATORIOS = [
     "kafka", "kubernetes", "k8s",
     "inglês fluente", "english fluent", "fluent english", "english required",
     "kotlin", "swift",
+]
+
+LOCAIS_ESTRANGEIROS = [
+    "united states", "united kingdom", " usa", "u.s.a", " us,", " us ",
+    "u.k.", "canada", "argentina", "méxico", "mexico", "españa", "spain",
+    "worldwide", "anywhere in the world", "global remote", "europe",
+    "colombia", "chile", "peru", "uruguay", "paraguay",
 ]
 
 STACK_AVANCADO = [
@@ -149,6 +159,10 @@ def registrar_e_enviar(conn, cursor, link, titulo, empresa, data_f, mensagem, fo
     print(f"   ✅ [{nivel_match}] {titulo[:50]}...")
     time.sleep(2)
 
+def local_estrangeiro(local):
+    l = local.lower()
+    return any(p in l for p in LOCAIS_ESTRANGEIROS)
+
 def filtros_basicos(titulo):
     """Retorna (bloqueada, motivo) com os filtros de perfil."""
     if is_senior(titulo):
@@ -238,15 +252,15 @@ def buscar_vagas_gupy(conn, cursor):
 
                     mensagem = (
                         f"🟣 <b>GUPY — {filtro['nome']}</b>\n\n"
-                        f"💼 <b>Vaga:</b> {titulo}\n"
-                        f"🏢 <b>Empresa:</b> {empresa}\n"
-                        f"📍 <b>Local:</b> {local}\n"
+                        f"💼 <b>Vaga:</b> {esc(titulo)}\n"
+                        f"🏢 <b>Empresa:</b> {esc(empresa)}\n"
+                        f"📍 <b>Local:</b> {esc(local)}\n"
                         f"💻 <b>Modelo:</b> {modelo}\n"
                         f"📄 <b>Tipo:</b> {tipo}\n"
                         f"♿ <b>PCD:</b> {pcd}\n"
                         f"📅 <b>Data:</b> {data_f} às {hora_f}\n"
                         f"📊 <b>Match:</b> {nivel_match} · <i>{techs_str}</i>\n\n"
-                        f"🔗 <a href='{link}'>Aplicar na Gupy</a>"
+                        f"🔗 <a href='{esc(link)}'>Aplicar na Gupy</a>"
                     )
                     registrar_e_enviar(conn, cursor, link, titulo, empresa, data_f, mensagem, "GUPY", nivel_match)
 
@@ -356,15 +370,15 @@ def buscar_vagas_programathor(conn, cursor):
 
                     mensagem = (
                         f"🟤 <b>PROGRAMATHOR — {filtro['nome']}</b>\n\n"
-                        f"💼 <b>Vaga:</b> {titulo}\n"
-                        f"🏢 <b>Empresa:</b> {empresa}\n"
-                        f"📍 <b>Local:</b> {local}\n"
-                        f"📄 <b>Nível:</b> {nivel}"
-                        + (f" · {tipo}" if tipo else "") + "\n"
-                        + (f"💰 <b>Salário:</b> {salario}\n" if salario else "")
-                        + (f"🛠️  <b>Stack:</b> <i>{tags_str}</i>\n" if tags_str else "")
-                        + f"📊 <b>Match:</b> {nivel_match} · <i>{techs_str}</i>\n\n"
-                        f"🔗 <a href='{link}'>Aplicar no ProgramaThor</a>"
+                        f"💼 <b>Vaga:</b> {esc(titulo)}\n"
+                        f"🏢 <b>Empresa:</b> {esc(empresa)}\n"
+                        f"📍 <b>Local:</b> {esc(local)}\n"
+                        f"📄 <b>Nível:</b> {esc(nivel)}"
+                        + (f" · {esc(tipo)}" if tipo else "") + "\n"
+                        + (f"💰 <b>Salário:</b> {esc(salario)}\n" if salario else "")
+                        + (f"🛠️  <b>Stack:</b> <i>{esc(tags_str)}</i>\n" if tags_str else "")
+                        + f"📊 <b>Match:</b> {nivel_match} · <i>{esc(techs_str)}</i>\n\n"
+                        f"🔗 <a href='{esc(link)}'>Aplicar no ProgramaThor</a>"
                     )
                     registrar_e_enviar(conn, cursor, link, titulo, empresa, datetime.now().strftime("%d/%m/%Y"), mensagem, "PROGRAMATHOR", nivel_match)
 
@@ -395,8 +409,8 @@ def buscar_vagas_linkedin(conn, cursor):
     filtros = [
         {"nome": "FRONT END · SP",      "params": {"keywords": "desenvolvedor front end", "location": "São Paulo, Brazil", "f_TPR": "r259200", "start": 0}},
         {"nome": "FULL STACK · SP",     "params": {"keywords": "desenvolvedor full stack", "location": "São Paulo, Brazil", "f_TPR": "r259200", "start": 0}},
-        {"nome": "FRONT END · REMOTO",  "params": {"keywords": "desenvolvedor front end",  "f_WT": "2", "f_TPR": "r259200", "start": 0}},
-        {"nome": "FULL STACK · REMOTO", "params": {"keywords": "desenvolvedor full stack",  "f_WT": "2", "f_TPR": "r259200", "start": 0}},
+        {"nome": "FRONT END · REMOTO",  "params": {"keywords": "desenvolvedor front end",  "location": "Brazil", "f_WT": "2", "f_TPR": "r259200", "start": 0}},
+        {"nome": "FULL STACK · REMOTO", "params": {"keywords": "desenvolvedor full stack",  "location": "Brazil", "f_WT": "2", "f_TPR": "r259200", "start": 0}},
     ]
 
     for filtro in filtros:
@@ -417,14 +431,20 @@ def buscar_vagas_linkedin(conn, cursor):
             for card in cards:
                 titulo_el  = card.find(class_=lambda c: c and 'title' in c)
                 empresa_el = card.find(class_=lambda c: c and 'subtitle' in c)
+                local_el   = card.find(class_=lambda c: c and 'location' in c)
                 link_el    = card.find('a', href=True)
                 data_el    = card.find('time')
 
                 titulo  = titulo_el.get_text(strip=True)  if titulo_el  else "Título Indisponível"
                 empresa = empresa_el.get_text(strip=True) if empresa_el else "Empresa não informada"
+                local   = local_el.get_text(strip=True)   if local_el   else ""
                 link    = link_el['href'].split('?')[0]   if link_el    else ''
 
                 if not link:
+                    continue
+
+                if local_estrangeiro(local):
+                    print(f"   🌍 Estrangeiro: {titulo[:45]} ({local})")
                     continue
 
                 try:
@@ -448,11 +468,12 @@ def buscar_vagas_linkedin(conn, cursor):
 
                 mensagem = (
                     f"🔷 <b>LINKEDIN — {filtro['nome']}</b>\n\n"
-                    f"💼 <b>Vaga:</b> {titulo}\n"
-                    f"🏢 <b>Empresa:</b> {empresa}\n"
-                    f"📅 <b>Data:</b> {data_f}\n"
+                    f"💼 <b>Vaga:</b> {esc(titulo)}\n"
+                    f"🏢 <b>Empresa:</b> {esc(empresa)}\n"
+                    + (f"📍 <b>Local:</b> {esc(local)}\n" if local else "")
+                    + f"📅 <b>Data:</b> {data_f}\n"
                     f"📊 <b>Match:</b> {nivel_match} · <i>{techs_str}</i>\n\n"
-                    f"🔗 <a href='{link}'>Aplicar no LinkedIn</a>"
+                    f"🔗 <a href='{esc(link)}'>Aplicar no LinkedIn</a>"
                 )
                 registrar_e_enviar(conn, cursor, link, titulo, empresa, data_f, mensagem, "LINKEDIN", nivel_match)
 
