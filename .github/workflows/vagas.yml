@@ -36,6 +36,6 @@ jobs:
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "Vagas Bot"
-          git add vagas_gupy.db
+          git add vagas_rpa.db
           git diff --staged --quiet || git commit -m "chore: atualiza vagas_gupy.db [skip ci]"
           git push
